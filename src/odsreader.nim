@@ -8,7 +8,9 @@ import std/tables
 import std/options
 import strformat
 
-type SheetNotFoundException* = object of CatchableError
+type
+  SheetNotFoundException* = object of CatchableError
+  InvalidColumnNameException* = object of CatchableError
 
 proc loadOdsAsTable*(filename: string, sheetName: Option[string]=none(string), onlyFirstSheet: bool = false):
   OrderedTableRef[string, seq[seq[string]]] =
@@ -20,7 +22,7 @@ proc loadOdsAsTable*(filename: string, sheetName: Option[string]=none(string), o
 
   var z: ZipArchive
   if not z.open(filename, fmRead):
-    echo "loadOdsAsSeq: open failed"
+    echo &"loadOdsAsSeq: failed to open {filename}"
     quit(1)
 
   let outStream = newStringStream("")
@@ -121,11 +123,108 @@ proc loadOdsAsSeq*(filename: string): seq[seq[string]] =
     # return first value from ordered table
     return value
 
+type
+  Row* = ref object
+    data: seq[string]
+    columnNames: OrderedTableRef[string, int]
+
+  Sheet* = ref object
+    data: seq[seq[string]]
+    columnNames: OrderedTableRef[string, int]
+
+  Document* = ref object
+    data: OrderedTableRef[string, seq[seq[string]]]
+    sheet: OrderedTableRef[string, Sheet]
+
+proc `[]`*(doc: Document, sheetName: string): Sheet =
+  return doc.sheet[sheetName]
+
+proc getSheetNames*(doc: Document): seq[string] =
+  var names: seq[string] = @[]
+  for name in doc.sheet.keys:
+    names.add(name)
+  return names
+
+proc `$`*(sheet: Sheet): string =
+  let outStream = newStringStream("")
+  for col in sheet.columnNames.keys:
+    outStream.write(col)
+    outStream.write(" | ")
+  outStream.write("\n")
+
+  for row in sheet.data:
+    outStream.write($row)
+    outStream.write("\n")
+
+  return outStream.data
+
+proc `$`*(row: Row): string =
+  let outStream = newStringStream("")
+
+  for item in row.data:
+    outStream.write(item)
+    outStream.write(" | ")
+
+  return outStream.data
+
+proc getColumnNames*(sheet: Sheet): OrderedTableRef[string, int] =
+  return sheet.columnNames
+
+proc `[]`*(sheet: Sheet, rowIndex: int): Row =
+  let row = Row(data: sheet.data[rowIndex], columnNames: sheet.columnNames)
+  return row
+
+proc `[]`*(row: Row, colName: string): string =
+  if not row.columnNames.hasKey(colName):
+    raise InvalidColumnNameException.newException(&"Column name >{colName}< not found!")
+
+  return row.data[row.columnNames[colName]]
+
+iterator items*(sheet: Sheet): Row =
+  for index in countup(0, len(sheet.data) - 1):
+    let row = Row(data: sheet.data[index], columnNames: sheet.columnNames)
+    yield row
+
+iterator pairs*(sheet: Sheet): tuple[index:int, row:Row] =
+  for index in countup(0, len(sheet.data) - 1):
+    let row = Row(data: sheet.data[index], columnNames: sheet.columnNames)
+    yield (index, row)
+
+proc loadOds*(filename: string, firstRowAreHeaders=true): Document =
+  let ods = loadOdsAsTable(filename)
+  var sheets = newOrderedTable[string, Sheet]()
+
+  for sheetName in ods.keys:
+    var columnNames = newOrderedTable[string, int]()
+    if firstRowAreHeaders:
+      var index = 0
+      for columnValue in ods[sheetName][0]:
+        var columnName = columnValue
+        if columnName == "":
+          # missing column name
+          columnName = &"Column{index}"
+        elif columnName in columnNames:
+          # duplicate
+          columnName = &"{columnValue}_{index}"
+
+        columnNames[columnName] = index
+        index += 1
+      ods[sheetName].delete(0)
+    else:
+      # firstRowAreHeaders=false
+      var columnName = ""
+      for colNumber in countup(0, len(ods[sheetName][0]) - 1):
+        columnName = &"Column{colNumber}"
+        columnNames[columnName] = colNumber
+    var sheet = Sheet(data: ods[sheetName], columnNames: columnNames)
+    sheets[sheetName] = sheet
+
+  return Document(data: ods, sheet: sheets)
+
 if isMainModule:
   let filename = "../tests/test.ods"
-  let odsTable = loadOdsAsTable(filename)
-  echo odsTable
-  let odsTable2 = loadOdsAsSeq(filename, "Sheet2")
-  echo odsTable2
-  let odsTable3 = loadOdsAsSeq(filename)
-  echo odsTable3
+  let doc = loadOds(filename)
+  echo doc.getSheetNames()
+  echo doc["Sheet1"].getColumnNames()
+  for row in doc["Sheet1"]:
+    echo row["first"]

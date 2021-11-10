@@ -97,3 +97,39 @@ suite "Load all sheets as table":
     check odsTable["Sheet2"][1][0] == ""
     check odsTable["Sheet2"][1][1] == "second2"
     check odsTable["Sheet2"][1][2] == ""
+
+
+suite "Load ODS Document":
+  let ods_filename = "tests/test.ods"
+  echo &"Loading all sheets from {ods_filename} as Document"
+  let doc = loadOds(ods_filename)
+
+  test "Sheets in Document":
+    check doc.getSheetNames() == @["Sheet1", "Sheet2"]
+
+  test "Column names from first row":
+    let colNamesTable = doc["Sheet1"].getColumnNames()
+    check colNamesTable["first"] == 0
+    check colNamesTable["Column1"] == 1
+
+  test "Row column name subscript access":
+    check doc["Sheet1"][0]["Column1"] == "second"
+
+  test "Sheet rows iterator":
+    for index, row in doc["Sheet1"]:
+      case index:
+        of 0:
+          check row["Column1"] == "second"
+        of 1:
+          check row["Column2"] == "third"
+        of 2:
+          check row["first"] == "last"
+        else:
+          raiseAssert("Unexpected row!")
+
+  test "Generated column names":
+    let doc2 = loadOds(ods_filename, firstRowAreHeaders=false)
+    let colNamesTable2 = doc2["Sheet1"].getColumnNames()
+    check colNamesTable2["Column0"] == 0
+    check colNamesTable2["Column1"] == 1
+
