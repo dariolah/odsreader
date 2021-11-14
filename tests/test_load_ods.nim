@@ -5,6 +5,7 @@ import unittest
 import odsreader
 import strformat
 import std/tables
+import strutils
 
 suite "Load first sheet from ODS as seq":
   let ods_filename = "tests/test.ods"
@@ -97,6 +98,8 @@ suite "Load all sheets as table":
     check odsTable["Sheet2"][1][0] == ""
     check odsTable["Sheet2"][1][1] == "second2"
     check odsTable["Sheet2"][1][2] == ""
+    check odsTable["Sheet2"][3][2].startsWith("Element")
+    check odsTable["Sheet2"][3][2].endsWith("menus.")
 
 
 suite "Load ODS Document":

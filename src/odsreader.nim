@@ -44,10 +44,13 @@ proc loadOdsAsTable*(filename: string, sheetName: Option[string]=none(string), o
   while true:
     x.next()
     case x.kind
-    of xmlElementStart, xmlElementOpen:
+    of xmlElementOpen:
       case x.elementName
       of "table:table-cell":
         inCell = true
+      else: discard
+    of xmlElementStart:
+      case x.elementName
       of "text:p":
         inTextP = true
       else: discard
@@ -58,7 +61,7 @@ proc loadOdsAsTable*(filename: string, sheetName: Option[string]=none(string), o
         odsRow = newSeq[string]()
       of "table:table-cell":
         for i in countup(1, repeat):
-          odsRow.add(cellValue)
+          odsRow.add(cellValue.strip())
         repeat = 1
         cellValue = ""
         inCell = false
@@ -71,6 +74,9 @@ proc loadOdsAsTable*(filename: string, sheetName: Option[string]=none(string), o
         if onlyFirstSheet:
           # load only first sheet
             break
+      of "text:p":
+        if inTextP == true:
+          cellValue = cellValue & "\n"
       else: discard
     of xmlAttribute:
       if inCell:
@@ -95,7 +101,7 @@ proc loadOdsAsTable*(filename: string, sheetName: Option[string]=none(string), o
             currentSheetName = x.attrValue
     of xmlCharData:
       if inTextP:
-        cellValue = x.charData
+        cellValue = cellValue & x.charData
     of xmlEof: break # end of file reached
     else:
       discard # ignore other events
@@ -225,6 +231,7 @@ if isMainModule:
   let filename = "../tests/test.ods"
   let doc = loadOds(filename)
   echo doc.getSheetNames()
-  echo doc["Sheet1"].getColumnNames()
-  for row in doc["Sheet1"]:
-    echo row["first"]
+  echo doc["Sheet2"].getColumnNames()
+  echo doc["Sheet2"]
+  #for row in doc["Sheet1"]:
+  #  echo row["first"]

@@ -19,7 +19,7 @@ proc mainProc =
 
   # Sheet iterator
   for row in doc.["Sheet1"]:
-  	# row column access
+    # row column access
     echo row["first"]
 
 if isMainModule:
