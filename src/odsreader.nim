@@ -1,6 +1,6 @@
 ## This module loads OpenDocument Spreadsheet
 
-import zip/zipfiles
+import zippy/ziparchives
 import streams
 import strutils
 import std/parsexml
@@ -20,13 +20,13 @@ proc loadOdsAsTable*(filename: string, sheetName: Option[string]=none(string), o
   ## If *onlyFirstSheet* is set to true, only first sheet wil be loaded. *sheetName* arg has precedence.
   ## Default: load all sheets
 
-  var z: ZipArchive
-  if not z.open(filename, fmRead):
-    echo &"loadOdsAsSeq: failed to open {filename}"
-    quit(1)
+  let z = try: openZipArchive(filename)
+          except:
+            echo &"loadOdsAsSeq: failed to open {filename}"
+            quit(1)
 
   let outStream = newStringStream("")
-  z.extractFile("content.xml", outStream)
+  outStream.write(z.extractFile("content.xml"))
   outStream.setPosition(0)
 
   var x: XmlParser
